@@ -262,9 +262,9 @@ class RAGVectorStore:
         self.embedding_dim = EMBEDDING_DIM
         
     def build_index(self, skill_map: Dict):
-    model = get_sentence_model()
-    if model is None:
-        logger.warning("RAG unavailable - falling back to keyword matching")
+        model = get_sentence_model()
+        if model is None:
+            logger.warning("RAG unavailable - falling back to keyword matching")
         return
             
         texts = []
@@ -286,7 +286,7 @@ class RAGVectorStore:
             contexts.append(context)
         
         try:
-            embeddings = sentence_model.encode(texts, convert_to_numpy=True, show_progress_bar=False)
+            embeddings = model.encode(texts, convert_to_numpy=True, show_progress_bar=False)
             self.index = faiss.IndexFlatL2(self.embedding_dim)
             self.index.add(embeddings.astype('float32'))
             self.skill_embeddings = embeddings
@@ -298,13 +298,13 @@ class RAGVectorStore:
             self.index = None
     
     def retrieve_relevant_skills(self, text: str, top_k: int = 15, threshold: float = 0.3):
-    model = get_sentence_model()
-    if self.index is None or model is None:
-        return []
+        model = get_sentence_model()
+        if self.index is None or model is None:
+            return []
         
         # embed the query safely
         q = text if len(text) < 8000 else text[:8000]
-        query_embedding = sentence_model.encode([q], convert_to_numpy=True, show_progress_bar=False)
+        embeddings = model.encode(texts, convert_to_numpy=True, show_progress_bar=False)
         distances, indices = self.index.search(query_embedding.astype('float32'), min(top_k, len(self.skill_names)))
         
         results = []
@@ -731,7 +731,8 @@ def extract_education(text):
 def semantic_similarity_enhanced(resume, job_desc):
     """Local embedding-based similarity (0-100)"""
     scores = []
-    if sentence_model is not None:
+    model = get_sentence_model()
+    if model is not None:
         try:
             r_emb = embed_text_cached(resume if len(resume) < 4000 else resume[:4000])
             j_emb = embed_text_cached(job_desc if len(job_desc) < 4000 else job_desc[:4000])
@@ -1585,4 +1586,5 @@ if __name__ == "__main__":
     # ✅ 2) use PORT from Render environment
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host="0.0.0.0", port=port)
+
 
