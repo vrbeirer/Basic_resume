@@ -187,20 +187,20 @@ client = OpenAI(api_key=api_key)
 
 # ==================== RAG IMPLEMENTATION ====================
 # Try to use a better model; fallback to mini if unavailable
-try:
-    sentence_model = SentenceTransformer('all-mpnet-base-v2', device='cpu')
-    EMBEDDING_DIM = 768
-    logger.info("✅ Sentence Transformer 'all-mpnet-base-v2' loaded - RAG enabled")
-except Exception as e:
-    logger.warning(f"Failed to load 'all-mpnet-base-v2' ({e}), falling back to 'all-MiniLM-L6-v2'")
-    try:
-        sentence_model = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
-        EMBEDDING_DIM = 384
-        logger.info("✅ Sentence Transformer 'all-MiniLM-L6-v2' loaded - RAG enabled (fallback)")
-    except Exception as e2:
-        logger.error(f"❌ Failed to load any Sentence Transformer: {str(e2)}")
-        sentence_model = None
-        EMBEDDING_DIM = 384
+# Initialize as None - will load on first request
+sentencemodel = None
+EMBEDDING_DIM = 384
+
+def get_sentence_model():
+    global sentencemodel
+    if sentencemodel is None:
+        try:
+            sentencemodel = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+            logger.info("Sentence Transformer loaded on first request")
+        except Exception as e:
+            logger.error(f"Failed to load model: {e}")
+    return sentencemodel
+
 
 # Knowledge base for enhanced skill context
 SKILL_KNOWLEDGE_BASE = {
@@ -262,10 +262,10 @@ class RAGVectorStore:
         self.embedding_dim = EMBEDDING_DIM
         
     def build_index(self, skill_map: Dict):
-        """Build FAISS vector index with rich skill context"""
-        if sentence_model is None:
-            logger.warning("RAG unavailable - falling back to keyword matching")
-            return
+    model = get_sentence_model()
+    if model is None:
+        logger.warning("RAG unavailable - falling back to keyword matching")
+        return
             
         texts = []
         names = []
@@ -297,10 +297,10 @@ class RAGVectorStore:
             logger.error(f"Failed to build RAG index: {e}")
             self.index = None
     
-    def retrieve_relevant_skills(self, text: str, top_k: int = 15, threshold: float = 0.3) -> List[Tuple[str, float]]:
-        """Retrieve most relevant skills from text using semantic search"""
-        if self.index is None or sentence_model is None:
-            return []
+    def retrieve_relevant_skills(self, text: str, top_k: int = 15, threshold: float = 0.3):
+    model = get_sentence_model()
+    if self.index is None or model is None:
+        return []
         
         # embed the query safely
         q = text if len(text) < 8000 else text[:8000]
@@ -631,12 +631,14 @@ def classify_role(job_desc):
 
 # CACHED EMBEDDING
 @lru_cache(maxsize=2048)
-def embed_text_cached(text: str):
-    if sentence_model is None:
+def embedtextcached(text: str):
+    model = get_sentence_model()
+    if model is None:
         raise RuntimeError("Sentence transformer not available")
-    t = text if len(text) < 4000 else text[:4000]
-    emb = sentence_model.encode([t], convert_to_numpy=True, show_progress_bar=False)[0]
+    t = text if len(text) <= 4000 else text[:4000]
+    emb = model.encode(t, convert_to_numpy=True, show_progress_bar=False)[0]
     return emb
+
 
 def extract_skills_with_rag(resume_text, job_desc):
     """Enhanced skill extraction using RAG"""
@@ -1583,3 +1585,4 @@ if __name__ == "__main__":
     # ✅ 2) use PORT from Render environment
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host="0.0.0.0", port=port)
+
