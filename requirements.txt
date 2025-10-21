@@ -1,0 +1,11 @@
+Flask==2.3.2
+Flask-Cors==4.0.0
+Flask-SQLAlchemy==3.0.2
+gunicorn==20.1.0
+openai==1.0.0
+sentence-transformers==2.2.2
+faiss-cpu==1.7.4
+numpy>=1.24
+scipy>=1.10
+PyMuPDF==1.22.5
+werkzeug>=2.3
